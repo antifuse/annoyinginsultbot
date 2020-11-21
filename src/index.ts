@@ -1,6 +1,7 @@
 import Discord = require("discord.js");
 import fs = require("fs");
 import crypto = require("crypto");
+import * as stringSimilarity from "string-similarity"
 interface insultList {
     insults: {
         content: string,
@@ -23,9 +24,12 @@ function readInsults() {
 }
 
 function addInsult(insult: string) {
+    let similarity = stringSimilarity.findBestMatch(insult,list.insults.map((element)=>element.content));
+    if (similarity.bestMatch.rating > 0.9) return similarity.bestMatch.target;
     list.insults.sort((a,b)=> (a.used > b.used) ? 1 : -1);
     list.insults.push({content: insult, used: list.insults[list.insults.length / 3].used});
     saveInsults();
+    return null;
 }
 
 function useRandomInsult(): string {
@@ -57,6 +61,7 @@ function approve(message: Discord.Message) {
         config.submitters.push(message.author.id);
         config.approbationcode = "##"+crypto.randomBytes(16).toString("hex");
         saveCfg();
+        message.channel.send("Approved! Insults go in here.")
     }
 }
 
@@ -68,7 +73,9 @@ client.on("message", (message) => {
         approve(message);
     } else {
         if (config.submitters.includes(message.author.id)) {
-            addInsult(message.content);
+            let denied = addInsult(message.content);
+            if (denied) message.channel.send("Too similar to: " + denied);
+            else message.channel.send("Added!");
         } else {
             message.channel.send("Not an approved submitter. Please contact the owner.")
         }

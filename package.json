@@ -1,0 +1,19 @@
+{
+  "name": "annoyinginsultbot",
+  "version": "1.0.0",
+  "description": "A discord bot that insults people. Simples.",
+  "main": "build/index.js",
+  "repository": "http://github.com/antifuse/annoyinginsultbot",
+  "author": "Antifuse",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^12.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^14.14.9"
+  },
+  "scripts": {
+    "compile": "tsc",
+    "start": "node build/index.js"
+  }
+}

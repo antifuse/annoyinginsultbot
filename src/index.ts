@@ -1,7 +1,6 @@
 import Discord = require("discord.js");
 import fs = require("fs");
 import crypto = require("crypto");
-import { json } from "sequelize/types";
 interface insultList {
     insults: {
         content: string,

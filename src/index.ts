@@ -24,8 +24,8 @@ function readInsults() {
 }
 
 function addInsult(insult: string) {
-    let similarity = stringSimilarity.findBestMatch(insult,list.insults.map((element)=>element.content));
-    if (similarity.bestMatch.rating > 0.9) return similarity.bestMatch.target;
+    let similarity = stringSimilarity.findBestMatch(insult.toLowerCase(),list.insults.map((element)=>element.content.toLowerCase()));
+    if (similarity.bestMatch.rating > 0.8) return similarity.bestMatch.target;
     list.insults.sort((a,b)=> (a.used > b.used) ? 1 : -1);
     list.insults.push({content: insult, used: list.insults[Math.floor(list.insults.length / 3)].used});
     saveInsults();

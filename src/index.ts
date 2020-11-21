@@ -16,7 +16,7 @@ config.approbationcode = "##" + crypto.randomBytes(16).toString("hex");
 saveCfg();
 
 function saveInsults() {
-    fs.writeFile("./insults.json", JSON.stringify(list, null, 4), ()=>{});
+    fs.writeFile("./insults.json", JSON.stringify(list, null, 4), (err)=>console.log);
 }
 
 function readInsults() {
@@ -47,7 +47,7 @@ function between(min: number, max: number) {
 }
 
 function saveCfg() {
-    fs.writeFile("./config.json", JSON.stringify(config, null, 4), ()=>{});
+    fs.writeFile("./config.json", JSON.stringify(config, null, 4), (err)=>console.log);
 }
 
 function readCfg() {

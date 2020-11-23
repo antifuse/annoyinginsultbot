@@ -12,9 +12,10 @@ interface insultList {
 }
 
 const log = winston.createLogger({
+    format: winston.format.combine(winston.format.timestamp({format:'DD.MM. HH:mm:ss'}), winston.format.printf(info=>`${info.timestamp} ${info.level} | ${info.message}`)),
     transports: [
-        new winston.transports.Console({format: winston.format.simple()}),
-        new winston.transports.File({filename: 'insult.log', format: winston.format.simple()})
+        new winston.transports.Console(),
+        new winston.transports.File({filename: 'insult.log'})
     ]
 })
 
@@ -77,7 +78,7 @@ function readCfg() {
 }
 
 function approve(message: Discord.Message) {
-    log.info(`User ${message.author.discriminator} trying to authenticate with code ${message.content}.`)
+    log.info(`User ${message.author.username}${message.author.discriminator} trying to authenticate with code ${message.content}.`)
     if (!message.content.includes(config.approbationcode)) {
         log.warn(`Doesn't match current code ${config.approbationcode}. Denied!`)
         message.channel.send("Not a valid approbation code.")
@@ -97,7 +98,7 @@ client.on("message", (message) => {
     if (message.content.startsWith("##")) {
         approve(message);
     } else {
-        log.info(`Received proposition ${message.content} from user ${message.author.discriminator}`)
+        log.info(`Received proposition ${message.content} from user ${message.author.username}${message.author.discriminator}`)
         if (config.submitters.includes(message.author.id)) {
             log.info('Approved submitter, processing...');
             let denied = addInsult(message.content);
@@ -121,7 +122,7 @@ client.once('ready', async () =>{
         ic = channel;
     }
     user = await ic.guild.members.fetch(config.user);
-    log.info(`Starting insult session in channel ${ic.name}. Today's victim is ${user.user.discriminator}.`);
+    log.info(`Starting insult session in channel ${ic.name}. Today's victim is ${user.user.username}${user.user.discriminator}.`);
     doit();
 });
 

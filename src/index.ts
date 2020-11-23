@@ -13,8 +13,8 @@ interface insultList {
 
 const log = winston.createLogger({
     transports: [
-        new winston.transports.Console(),
-        new winston.transports.File({filename: 'insult.log'})
+        new winston.transports.Console({format: winston.format.simple()}),
+        new winston.transports.File({filename: 'insult.log', format: winston.format.simple()})
     ]
 })
 

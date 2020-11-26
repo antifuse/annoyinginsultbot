@@ -126,7 +126,7 @@ class Insulter {
 }
 
 client.login(config.token);
-let insulters: Insulter[];
+let insulters: Insulter[] = [];
 client.once('ready', async () =>{
     log.info(`Logged in! Bazinga!`);
     for (let victim of config.victims) {

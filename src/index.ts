@@ -22,7 +22,7 @@ const log = winston.createLogger({
 // on start: read insults and config, generate first approbation code
 let list: insultList;
 list = readInsults();
-let config: {token: string, user: string, channel: string, submitters: string[], approbationcode: string, min: number, max: number};
+let config: {token: string, victims:[{user: string, channel: string}], submitters: string[], approbationcode: string, min: number, max: number};
 config = readCfg();
 config.approbationcode = "##" + crypto.randomBytes(16).toString("hex");
 saveCfg();
@@ -46,9 +46,8 @@ function addInsult(insult: string) {
         return similarity.bestMatch.target;
     } 
     list.insults.sort((a,b)=> (a.used > b.used) ? 1 : -1);
-    let entryscore = list.insults[Math.floor(list.insults.length / 3)].used;
-    log.info('No objections. Inserting with entry score ' + entryscore);
-    let nsize = list.insults.push({content: insult, used: entryscore});
+    log.info('No objections. Inserting...');
+    let nsize = list.insults.push({content: insult, used: 0});
     saveInsults();
     log.info(`There are now ${nsize} insults in the list.`);
     return null;
@@ -111,26 +110,44 @@ client.on("message", (message) => {
     }
 });
 
-let ic: Discord.TextChannel;
-let user: Discord.GuildMember;
-client.login(config.token);
+class Insulter {
+    channel: Discord.TextChannel;
+    user: Discord.GuildMember;
+    name: string;
+    constructor(channel: Discord.TextChannel, user: Discord.GuildMember) {
+        this.channel = channel;
+        this.user = user;
+        this.name = user.user.username + "#" + user.user.discriminator;
+    }
 
+    insult(line: string) {
+        this.channel.send(this.user.toString() + " " + line);
+    }
+}
+
+client.login(config.token);
+let insulters: Insulter[];
 client.once('ready', async () =>{
     log.info(`Logged in! Bazinga!`);
-    let channel = await client.channels.fetch(config.channel);
-    if (channel instanceof Discord.TextChannel) {
-        ic = channel;
+    for (let victim of config.victims) {
+        let channel = await client.channels.fetch(victim.channel);
+        if (!(channel instanceof Discord.TextChannel)) continue;
+        let user = await channel.guild.members.fetch(victim.user);
+        if (user) {
+            insulters.push(new Insulter(channel, user));
+        }
     }
-    user = await ic.guild.members.fetch(config.user);
-    log.info(`Starting insult session in channel ${ic.name}. Today's victim is ${user.user.username}${user.user.discriminator}.`);
-    doit();
+    log.info(`Starting insult session with ${insulters.length} targets.`);
+    for (let v of insulters) {
+        doit(v);
+    }
 });
 
-function doit() {
+function doit(target: Insulter) {
     let insult = useRandomInsult();
-    ic.send(user.toString() + " " + insult);
-    log.info(`Told the user "${insult}". They weren't amused.`)
+    target.insult(insult);
+    log.info(`Told ${target.name} this: "${insult}". They weren't amused.`)
     let timeout = between(config.min * 1000,config.max * 1000);
     log.info(`Next insult in ${timeout} ms, that is at ${moment().add(timeout, 'milliseconds').format('HH:mm')}`);
-    setTimeout(doit, timeout);
+    setTimeout(()=>{doit(target)}, timeout);
 }

@@ -12,10 +12,10 @@ interface insultList {
 }
 
 const log = winston.createLogger({
-    format: winston.format.combine(winston.format.timestamp({format:'DD.MM. HH:mm:ss'}), winston.format.printf(info=>`${info.timestamp} ${info.level} | ${info.message}`)),
+    format: winston.format.combine(winston.format.timestamp({format:"DD.MM. HH:mm:ss"}), winston.format.printf(info=>`${info.timestamp} ${info.level} | ${info.message}`)),
     transports: [
         new winston.transports.Console(),
-        new winston.transports.File({filename: 'insult.log'})
+        new winston.transports.File({filename: "insult.log"})
     ]
 })
 
@@ -28,7 +28,7 @@ config.approbationcode = "##" + crypto.randomBytes(16).toString("hex");
 saveCfg();
 
 function saveInsults() {
-    log.info('Saving insults...');
+    log.info("Saving insults...");
     fs.writeFile("./insults.json", JSON.stringify(list, null, 4), (err)=>log.error);
 }
 
@@ -46,7 +46,7 @@ function addInsult(insult: string) {
         return similarity.bestMatch.target;
     } 
     list.insults.sort((a,b)=> (a.used > b.used) ? 1 : -1);
-    log.info('No objections. Inserting...');
+    log.info("No objections. Inserting...");
     let nsize = list.insults.push({content: insult, used: 0});
     saveInsults();
     log.info(`There are now ${nsize} insults in the list.`);
@@ -99,12 +99,12 @@ client.on("message", (message) => {
     } else {
         log.info(`Received proposition ${message.content} from user ${message.author.username}${message.author.discriminator}`)
         if (config.submitters.includes(message.author.id)) {
-            log.info('Approved submitter, processing...');
+            log.info("Approved submitter, processing...");
             let denied = addInsult(message.content);
             if (denied) message.channel.send("Too similar to: " + denied);
             else message.channel.send("Added!");
         } else {
-            log.warn('Not an approved submitter!')
+            log.warn("Not an approved submitter!")
             message.channel.send("Not an approved submitter. Please contact the owner.")
         }
     }
@@ -127,8 +127,8 @@ class Insulter {
 
 client.login(config.token);
 let insulters: Insulter[] = [];
-client.once('ready', async () =>{
-    log.info(`Logged in! Bazinga!`);
+client.once("ready", async () =>{
+    log.info("Logged in! Bazinga!");
     for (let victim of config.victims) {
         let channel = await client.channels.fetch(victim.channel);
         if (!(channel instanceof Discord.TextChannel)) continue;
@@ -147,7 +147,7 @@ function doit(target: Insulter) {
     let insult = useRandomInsult();
     target.insult(insult);
     log.info(`Told ${target.name} this: "${insult}". They weren't amused.`)
-    let timeout = between(config.min * 1000,config.max * 1000);
-    log.info(`Next insult in ${timeout} ms, that is at ${moment().add(timeout, 'milliseconds').format('HH:mm')}`);
+    let timeout = between(config.min * 1000, config.max * 1000);
+    log.info(`Next insult in ${timeout} ms, that is at ${moment().add(timeout, "milliseconds").format("HH:mm")}`);
     setTimeout(()=>{doit(target)}, timeout);
 }

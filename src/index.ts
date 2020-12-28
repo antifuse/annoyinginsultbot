@@ -4,6 +4,7 @@ import crypto = require("crypto");
 import * as stringSimilarity from "string-similarity";
 import * as winston from "winston";
 import moment from "moment";
+
 interface insultList {
     insults: {
         content: string,
@@ -11,51 +12,66 @@ interface insultList {
     }[]
 }
 
+class Insulter {
+    channel: Discord.TextChannel;
+    user: Discord.GuildMember;
+    name: string;
+    constructor(channel: Discord.TextChannel, user: Discord.GuildMember) {
+        this.channel = channel;
+        this.user = user;
+        this.name = user.user.username + "#" + user.user.discriminator;
+    }
+
+    async insult(line: string) {
+        return await this.channel.send(this.user.toString() + " " + line);
+    }
+}
+
 const log = winston.createLogger({
-    format: winston.format.combine(winston.format.timestamp({format:"DD.MM. HH:mm:ss"}), winston.format.printf(info=>`${info.timestamp} ${info.level} | ${info.message}`)),
+    format: winston.format.combine(winston.format.timestamp({ format: "DD.MM. HH:mm:ss" }), winston.format.printf(info => `${info.timestamp} ${info.level} | ${info.message}`)),
     transports: [
         new winston.transports.Console(),
-        new winston.transports.File({filename: "insult.log"})
+        new winston.transports.File({ filename: "insult.log" })
     ]
 })
 
 // on start: read insults and config, generate first approbation code
 let list: insultList;
 list = readInsults();
-let config: {token: string, victims:[{user: string, channel: string}], submitters: string[], approbationcode: string, min: number, max: number};
+let config: { token: string, victims: [{ user: string, channel: string }], submitters: string[], approbationcode: string, min: number, max: number };
 config = readCfg();
 config.approbationcode = "##" + crypto.randomBytes(16).toString("hex");
 saveCfg();
 
 function saveInsults() {
     log.info("Saving insults...");
-    fs.writeFile("./insults.json", JSON.stringify(list, null, 4), (err)=>log.error);
+    fs.writeFile("./insults.json", JSON.stringify(list, null, 4), (err) => log.error);
 }
 
 function readInsults() {
-    return JSON.parse(fs.readFileSync("./insults.json", {encoding: "utf-8"}));
+    return JSON.parse(fs.readFileSync("./insults.json", { encoding: "utf-8" }));
 }
 
 function addInsult(insult: string) {
     // Check similarity with existing insults
-    let similarity = stringSimilarity.findBestMatch(insult.toLowerCase(),list.insults.map((element)=>element.content.toLowerCase()));
+    let similarity = stringSimilarity.findBestMatch(insult.toLowerCase(), list.insults.map((element) => element.content.toLowerCase()));
     log.info(`Best match: ${similarity.bestMatch.target} // Rating: ${similarity.bestMatch.rating}`);
-    
+
     if (similarity.bestMatch.rating > 0.8) {
         log.info(`Insult ${insult} was not added.`)
         return similarity.bestMatch.target;
-    } 
-    list.insults.sort((a,b)=> (a.used > b.used) ? 1 : -1);
+    }
+    list.insults.sort((a, b) => (a.used > b.used) ? 1 : -1);
     log.info("No objections. Inserting...");
-    let nsize = list.insults.push({content: insult, used: 0});
+    let nsize = list.insults.push({ content: insult, used: 0 });
     saveInsults();
     log.info(`There are now ${nsize} insults in the list.`);
     return null;
 }
 
 function useRandomInsult(): string {
-    list.insults.sort((a,b)=> (a.used > b.used) ? 1 : -1)
-    let index = between(0, list.insults.length / 3);
+    list.insults.sort((a, b) => (a.used > b.used) ? 1 : -1)
+    let index = between(0, list.insults.length / 5);
     list.insults[index].used++;
     saveInsults();
     return list.insults[index].content;
@@ -69,11 +85,11 @@ function between(min: number, max: number) {
 }
 
 function saveCfg() {
-    fs.writeFile("./config.json", JSON.stringify(config, null, 4), (err)=>log.error);
+    fs.writeFile("./config.json", JSON.stringify(config, null, 4), (err) => log.error);
 }
 
 function readCfg() {
-    return JSON.parse(fs.readFileSync("./config.json", {encoding: "utf-8"}));
+    return JSON.parse(fs.readFileSync("./config.json", { encoding: "utf-8" }));
 }
 
 function approve(message: Discord.Message) {
@@ -83,7 +99,7 @@ function approve(message: Discord.Message) {
         message.channel.send("Not a valid approbation code.")
     } else {
         config.submitters.push(message.author.id);
-        config.approbationcode = "##"+crypto.randomBytes(16).toString("hex");
+        config.approbationcode = "##" + crypto.randomBytes(16).toString("hex");
         saveCfg();
         message.channel.send("Approved! Insults go in here.");
         log.info(`Approved! New code generated. There are now ${config.submitters.length} approved submitters.`)
@@ -110,24 +126,9 @@ client.on("message", (message) => {
     }
 });
 
-class Insulter {
-    channel: Discord.TextChannel;
-    user: Discord.GuildMember;
-    name: string;
-    constructor(channel: Discord.TextChannel, user: Discord.GuildMember) {
-        this.channel = channel;
-        this.user = user;
-        this.name = user.user.username + "#" + user.user.discriminator;
-    }
-
-    insult(line: string) {
-        this.channel.send(this.user.toString() + " " + line);
-    }
-}
-
 client.login(config.token);
 let insulters: Insulter[] = [];
-client.once("ready", async () =>{
+client.once("ready", async () => {
     log.info("Logged in! Bazinga!");
     for (let victim of config.victims) {
         let channel = await client.channels.fetch(victim.channel);
@@ -138,16 +139,17 @@ client.once("ready", async () =>{
         }
     }
     log.info(`Starting insult session with ${insulters.length} targets.`);
-    for (let v of insulters) {
-        doit(v);
-    }
+    insulters.forEach(doit);
 });
 
 function doit(target: Insulter) {
     let insult = useRandomInsult();
-    target.insult(insult);
-    log.info(`Told ${target.name} this: "${insult}". They weren't amused.`)
+    target.insult(insult).then(() => {
+        log.info(`Told ${target.name} this: "${insult}". They weren't amused.`)
+    }).catch((err) => {
+        log.warn(`There was an error insulting ${target.name}.`);
+    });
     let timeout = between(config.min * 1000, config.max * 1000);
     log.info(`Next insult in ${timeout} ms, that is at ${moment().add(timeout, "milliseconds").format("HH:mm")}`);
-    setTimeout(()=>{doit(target)}, timeout);
+    setTimeout(() => { doit(target) }, timeout);
 }

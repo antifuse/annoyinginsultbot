@@ -4,6 +4,9 @@ import crypto = require("crypto");
 import * as stringSimilarity from "string-similarity";
 import * as winston from "winston";
 import moment from "moment";
+import { DataTypes, Model, Sequelize, where } from "sequelize";
+import { Submitter } from "./SubmitterModel";
+import { Insult } from "./InsultModel";
 
 interface insultList {
     insults: {
@@ -33,48 +36,98 @@ const log = winston.createLogger({
         new winston.transports.Console(),
         new winston.transports.File({ filename: "insult.log" })
     ]
-})
+});
 
-// on start: read insults and config, generate first approbation code
-let list: insultList;
-list = readInsults();
-let config: { token: string, victims: [{ user: string, channel: string }], submitters: string[], approbationcode: string, min: number, max: number };
-config = readCfg();
-config.approbationcode = "##" + crypto.randomBytes(16).toString("hex");
-saveCfg();
+const sequelize = new Sequelize({
+    dialect: 'sqlite',
+    storage: 'insults.sqlite',
+    logging: log.debug.bind(log)
+});
 
-function saveInsults() {
-    log.info("Saving insults...");
-    fs.writeFile("./insults.json", JSON.stringify(list, null, 4), (err) => log.error);
-}
+Submitter.init({
+    sid: {
+        type: DataTypes.INTEGER,
+        autoIncrement: true,
+        primaryKey: true
+    },
+    userid: DataTypes.STRING,
+    free: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true
+    },
+    authcode: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        allowNull: false,
+        unique: true
+    }
+}, {
+    sequelize,
+    modelName: 'Submitter',
+    timestamps: true,
+    createdAt: false
+});
+
+Insult.init({
+    iid: {
+        type: DataTypes.INTEGER,
+        autoIncrement: true,
+        primaryKey: true
+    },
+    content: DataTypes.STRING,
+    used: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        allowNull: false
+    }
+}, {
+    sequelize,
+    tableName: 'Insult',
+    timestamps: true,
+    updatedAt: 'lastUsed'
+});
+
+let config: { token: string, victims: [{ user: string, channel: string }], min: number, max: number };
+sequelize.sync().then(()=>{
+    // on start: read config, import possible starting list
+    let list: insultList;
+    list = readInsults();
+    
+    config = readCfg();
+    Insult.count().then(count=>{
+        if (count == 0) {
+            Insult.bulkCreate(list.insults.map(insult=>{return {content: insult.content, used: insult.used};}));
+            Submitter.create({});
+        }
+    });
+    client.login(config.token);
+});
 
 function readInsults() {
     return JSON.parse(fs.readFileSync("./insults.json", { encoding: "utf-8" }));
 }
 
-function addInsult(insult: string) {
+async function addInsult(insult: string) {
     // Check similarity with existing insults
-    let similarity = stringSimilarity.findBestMatch(insult.toLowerCase(), list.insults.map((element) => element.content.toLowerCase()));
+    let insults = await Insult.findAll();
+    let similarity = stringSimilarity.findBestMatch(insult.toLowerCase(), insults.map((element) => element.content.toLowerCase()));
     log.info(`Best match: ${similarity.bestMatch.target} // Rating: ${similarity.bestMatch.rating}`);
 
     if (similarity.bestMatch.rating > 0.8) {
         log.info(`Insult ${insult} was not added.`)
         return similarity.bestMatch.target;
     }
-    list.insults.sort((a, b) => (a.used > b.used) ? 1 : -1);
     log.info("No objections. Inserting...");
-    let nsize = list.insults.push({ content: insult, used: 0 });
-    saveInsults();
-    log.info(`There are now ${nsize} insults in the list.`);
+    Insult.create({content: insult}).then(()=>{log.info(`There are now ${insults.length + 1} insults in the list.`);});
     return null;
 }
 
-function useRandomInsult(): string {
-    list.insults.sort((a, b) => (a.used > b.used) ? 1 : -1)
-    let index = between(0, list.insults.length / 5);
-    list.insults[index].used++;
-    saveInsults();
-    return list.insults[index].content;
+async function useRandomInsult() {
+    let insults = await Insult.findAll({order: [['used','ASC']]});
+    let index = between(0, insults.length / 5);
+    insults[index].used++;
+    insults[index].save();
+    return insults[index].content;
 }
 
 // duh. get your shit together, Math
@@ -84,49 +137,41 @@ function between(min: number, max: number) {
     )
 }
 
-function saveCfg() {
-    fs.writeFile("./config.json", JSON.stringify(config, null, 4), (err) => log.error);
-}
-
 function readCfg() {
     return JSON.parse(fs.readFileSync("./config.json", { encoding: "utf-8" }));
 }
 
-function approve(message: Discord.Message) {
-    log.info(`User ${message.author.username}${message.author.discriminator} trying to authenticate with code ${message.content}.`)
-    if (!message.content.includes(config.approbationcode)) {
-        log.warn(`Doesn't match current code ${config.approbationcode}. Denied!`)
-        message.channel.send("Not a valid approbation code.")
+async function approve(message: Discord.Message) {
+    log.info(`User ${message.author.username}${message.author.discriminator} trying to authenticate with code ${message.content}.`);
+    let freeSpace = await Submitter.findOne({where: {free: true}});
+    if (!freeSpace) log.error('No active approbation code in Submitter table! Please check whatever you\'ve done wrong this time.');
+    else if (freeSpace.authcode != message.content) {
+        log.warn(`Doesn't match current code ${freeSpace.authcode}. Denied!`)
+        message.channel.send("You are not yet an approved submitter. Please contact the owner!")
     } else {
-        config.submitters.push(message.author.id);
-        config.approbationcode = "##" + crypto.randomBytes(16).toString("hex");
-        saveCfg();
+        freeSpace.free = false;
+        freeSpace.userid = message.author.id;
+        await freeSpace.save();
+        Submitter.create({});
         message.channel.send("Approved! Insults go in here.");
-        log.info(`Approved! New code generated. There are now ${config.submitters.length} approved submitters.`)
+        log.info(`Approved! New code generated. There are now ${await Submitter.count()-1} approved submitters.`)
     }
 }
 
 const client = new Discord.Client();
-client.on("message", (message) => {
+client.on("message", async (message) => {
     if (message.channel.type != "dm" || message.author.bot) return;
-    config = readCfg();
-    if (message.content.startsWith("##")) {
+    if (await Submitter.count({where:{userid: message.author.id}}) == 0) {
         approve(message);
     } else {
-        log.info(`Received proposition ${message.content} from user ${message.author.username}${message.author.discriminator}`)
-        if (config.submitters.includes(message.author.id)) {
-            log.info("Approved submitter, processing...");
-            let denied = addInsult(message.content);
-            if (denied) message.channel.send("Too similar to: " + denied);
-            else message.channel.send("Added!");
-        } else {
-            log.warn("Not an approved submitter!")
-            message.channel.send("Not an approved submitter. Please contact the owner.")
-        }
+        log.info(`Received proposition ${message.content} from approved user ${message.author.username}#${message.author.discriminator}`)
+        let denied = await addInsult(message.content);
+        if (denied) message.channel.send("Too similar to: " + denied);
+        else message.channel.send("Added!");
     }
 });
 
-client.login(config.token);
+
 let insulters: Insulter[] = [];
 client.once("ready", async () => {
     log.info("Logged in! Bazinga!");
@@ -143,13 +188,14 @@ client.once("ready", async () => {
 });
 
 function doit(target: Insulter) {
-    let insult = useRandomInsult();
-    target.insult(insult).then(() => {
-        log.info(`Told ${target.name} this: "${insult}". They weren't amused.`)
-    }).catch((err) => {
-        log.warn(`There was an error insulting ${target.name}.`);
+    useRandomInsult().then(insult=>{
+        target.insult(insult).then(() => {
+            log.info(`Told ${target.name} this: "${insult}". They weren't amused.`)
+        }).catch((err) => {
+            log.warn(`There was an error insulting ${target.name}.`);
+        });
+        let timeout = between(config.min * 1000, config.max * 1000);
+        log.info(`Next insult in ${timeout} ms, that is at ${moment().add(timeout, "milliseconds").format("HH:mm")}`);
+        setTimeout(() => { doit(target) }, timeout);
     });
-    let timeout = between(config.min * 1000, config.max * 1000);
-    log.info(`Next insult in ${timeout} ms, that is at ${moment().add(timeout, "milliseconds").format("HH:mm")}`);
-    setTimeout(() => { doit(target) }, timeout);
 }

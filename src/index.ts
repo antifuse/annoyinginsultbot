@@ -73,7 +73,7 @@ Insult.init({
         autoIncrement: true,
         primaryKey: true
     },
-    content: DataTypes.STRING,
+    content: DataTypes.STRING(4096),
     used: {
         type: DataTypes.INTEGER,
         defaultValue: 0,

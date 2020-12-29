@@ -16,5 +16,10 @@ export class Submitter extends Model<SubmitterAttributes, SubmitterCreationAttri
     public free!: boolean;
     public authcode!: string;
 
-    public readonly updatedAt!: Date;
+    public readonly insults?: Insult[];
+    public getInsults!: HasManyGetAssociationsMixin<Insult>;
+    public countInsults!: HasManyCountAssociationsMixin;
+    public createInsult!: HasManyCreateAssociationMixin<Insult>;
+
+    public readonly registeredAt!: Date;
 }

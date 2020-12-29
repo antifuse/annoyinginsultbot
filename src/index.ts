@@ -63,9 +63,10 @@ Submitter.init({
     }
 }, {
     sequelize,
-    modelName: 'Submitter',
+    tableName: 'Submitter',
     timestamps: true,
-    createdAt: false
+    createdAt: false,
+    updatedAt: 'registeredAt'
 });
 
 Insult.init({
@@ -79,6 +80,10 @@ Insult.init({
         type: DataTypes.INTEGER,
         defaultValue: 0,
         allowNull: false
+    },
+    by: {
+        type: DataTypes.INTEGER,
+        allowNull: true
     }
 }, {
     sequelize,
@@ -87,27 +92,19 @@ Insult.init({
     updatedAt: 'lastUsed'
 });
 
-let config: { token: string, victims: [{ user: string, channel: string }], min: number, max: number };
-sequelize.sync().then(()=>{
-    // on start: read config, import possible starting list
-    let list: insultList;
-    list = readInsults();
-    
-    config = readCfg();
-    Insult.count().then(count=>{
-        if (count == 0) {
-            Insult.bulkCreate(list.insults.map(insult=>{return {content: insult.content, used: insult.used};}));
-            Submitter.create({});
-        }
-    });
-    client.login(config.token);
+Submitter.hasMany(Insult, {
+    as: 'insults',
+    foreignKey: 'by'
 });
+
+let config: { token: string, victims: [{ user: string, channel: string }], min: number, max: number };
+const client = new Discord.Client();
 
 function readInsults() {
     return JSON.parse(fs.readFileSync("./insults.json", { encoding: "utf-8" }));
 }
 
-async function addInsult(insult: string) {
+async function addInsult(insult: string, submitter: Submitter) {
     // Check similarity with existing insults
     let insults = await Insult.findAll();
     let similarity = stringSimilarity.findBestMatch(insult.toLowerCase(), insults.map((element) => element.content.toLowerCase()));
@@ -118,7 +115,8 @@ async function addInsult(insult: string) {
         return similarity.bestMatch.target;
     }
     log.info("No objections. Inserting...");
-    Insult.create({content: insult}).then(()=>{log.info(`There are now ${insults.length + 1} insults in the list.`);});
+    submitter.createInsult({content: insult}).then(()=>{log.info(`There are now ${insults.length + 1} insults in the list.`);});
+    submitter.save();
     return null;
 }
 
@@ -158,14 +156,15 @@ async function approve(message: Discord.Message) {
     }
 }
 
-const client = new Discord.Client();
+
 client.on("message", async (message) => {
     if (message.channel.type != "dm" || message.author.bot) return;
-    if (await Submitter.count({where:{userid: message.author.id}}) == 0) {
+    let submitter: Submitter | null = await Submitter.findOne({where:{userid: message.author.id}});
+    if (submitter === null) {
         approve(message);
     } else {
         log.info(`Received proposition ${message.content} from approved user ${message.author.username}#${message.author.discriminator}`)
-        let denied = await addInsult(message.content);
+        let denied = await addInsult(message.content, submitter);
         if (denied) message.channel.send("Too similar to: " + denied);
         else message.channel.send("Added!");
     }
@@ -187,15 +186,32 @@ client.once("ready", async () => {
     insulters.forEach(doit);
 });
 
-function doit(target: Insulter) {
-    useRandomInsult().then(insult=>{
-        target.insult(insult).then(() => {
-            log.info(`Told ${target.name} this: "${insult}". They weren't amused.`)
-        }).catch((err) => {
-            log.warn(`There was an error insulting ${target.name}.`);
-        });
+async function doit(target: Insulter) {
+    let insult = await useRandomInsult();
+    target.insult(insult).then(()=>{
+        log.info(`Told ${target.name} this: "${insult}". They weren't amused.`);
+    }).catch((err) => {
+        log.warn(`There was an error insulting ${target.name}.`);
+    }).finally(()=>{
         let timeout = between(config.min * 1000, config.max * 1000);
-        log.info(`Next insult in ${timeout} ms, that is at ${moment().add(timeout, "milliseconds").format("HH:mm")}`);
         setTimeout(() => { doit(target) }, timeout);
-    });
+        log.info(`Next insult in ${timeout} ms, that is at ${moment().add(timeout, "milliseconds").format("HH:mm")}`);
+   });
 }
+
+(async ()=>{
+    await sequelize.sync();
+    // on start: read config, import possible starting list
+    let list: insultList;
+    list = readInsults();
+    
+    config = readCfg();
+    Insult.count().then(count=>{
+        if (count == 0) {
+            Insult.bulkCreate(list.insults.map(insult=>{return {content: insult.content, used: insult.used};}));
+            Submitter.create();
+        }
+        client.login(config.token);
+    });
+})();
+

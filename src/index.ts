@@ -4,7 +4,7 @@ import crypto = require("crypto");
 import * as stringSimilarity from "string-similarity";
 import * as winston from "winston";
 import moment from "moment";
-import { DataTypes, Model, Sequelize, where } from "sequelize";
+import { CreateDatabaseOptions, DataTypes, Model, Sequelize, where } from "sequelize";
 import { Submitter } from "./SubmitterModel";
 import { Insult } from "./InsultModel";
 
@@ -37,12 +37,10 @@ const log = winston.createLogger({
         new winston.transports.File({ filename: "insult.log" })
     ]
 });
+let config: { token: string, victims: [{ user: string, channel: string }], min: number, max: number, database: string};
+config = readCfg();
 
-const sequelize = new Sequelize({
-    dialect: 'sqlite',
-    storage: 'insults.sqlite',
-    logging: log.debug.bind(log)
-});
+const sequelize = new Sequelize(config.database, {logging: log.debug.bind(log)});
 
 Submitter.init({
     sid: {
@@ -97,7 +95,7 @@ Submitter.hasMany(Insult, {
     foreignKey: 'by'
 });
 
-let config: { token: string, victims: [{ user: string, channel: string }], min: number, max: number };
+
 const client = new Discord.Client();
 
 function readInsults() {
@@ -205,8 +203,6 @@ async function doit(target: Insulter) {
     // on start: read config, import possible starting list
     let list: insultList;
     list = readInsults();
-    
-    config = readCfg();
     Insult.count().then(count=>{
         if (count == 0) {
             Insult.bulkCreate(list.insults.map(insult=>{return {content: insult.content, used: insult.used};}));

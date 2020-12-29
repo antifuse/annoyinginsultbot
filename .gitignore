@@ -1,5 +1,7 @@
 /build/
 /node_modules/
 config.json
+insults.sqlite
 insults.json
 insult.log
+.vscode

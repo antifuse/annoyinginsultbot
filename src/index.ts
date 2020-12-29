@@ -132,7 +132,7 @@ async function useRandomInsult() {
 function between(min: number, max: number) {
     return Math.floor(
         Math.random() * (max - min) + min
-    )
+    );
 }
 
 function readCfg() {
@@ -141,18 +141,19 @@ function readCfg() {
 
 async function approve(message: Discord.Message) {
     log.info(`User ${message.author.username}${message.author.discriminator} trying to authenticate with code ${message.content}.`);
-    let freeSpace = await Submitter.findOne({where: {free: true}});
-    if (!freeSpace) log.error('No active approbation code in Submitter table! Please check whatever you\'ve done wrong this time.');
-    else if (freeSpace.authcode != message.content) {
-        log.warn(`Doesn't match current code ${freeSpace.authcode}. Denied!`)
+    let space = await Submitter.findOne({where: {free: true, authcode: message.content}});
+    if (!space) {
+        log.warn(`Doesn't match current code. Denied!`)
         message.channel.send("You are not yet an approved submitter. Please contact the owner!")
     } else {
-        freeSpace.free = false;
-        freeSpace.userid = message.author.id;
-        await freeSpace.save();
-        Submitter.create({});
+        space.free = false;
+        space.userid = message.author.id;
+        await space.save();
+        Submitter.create().then(freespace=>{
+            log.info(`New code generated: ${freespace.authcode}`);
+        });
         message.channel.send("Approved! Insults go in here.");
-        log.info(`Approved! New code generated. There are now ${await Submitter.count()-1} approved submitters.`)
+        log.info(`Approved! There are now ${await Submitter.count({where: {free: false}})} approved submitters.`);
     }
 }
 

@@ -148,9 +148,6 @@ async function approve(message: Discord.Message) {
         space.free = false;
         space.userid = message.author.id;
         await space.save();
-        Submitter.create().then(freespace=>{
-            log.info(`New code generated: ${freespace.authcode}`);
-        });
         message.channel.send("Approved! Insults go in here.");
         log.info(`Approved! There are now ${await Submitter.count({where: {free: false}})} approved submitters.`);
     }

@@ -61,10 +61,10 @@ Submitter.init({
     }
 }, {
     sequelize,
-    tableName: 'Submitter',
+    tableName: 'submitter',
     timestamps: true,
     createdAt: false,
-    updatedAt: 'registeredAt'
+    updatedAt: 'registeredat'
 });
 
 Insult.init({
@@ -85,9 +85,10 @@ Insult.init({
     }
 }, {
     sequelize,
-    tableName: 'Insult',
+    tableName: 'insult',
     timestamps: true,
-    updatedAt: 'lastUsed'
+    updatedAt: 'lastused',
+    createdAt: 'createdat'
 });
 
 Submitter.hasMany(Insult, {

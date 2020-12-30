@@ -120,7 +120,7 @@ async function addInsult(insult: string, submitter: Submitter) {
 }
 
 async function useRandomInsult() {
-    let insults = await Insult.findAll({order: [['used','ASC']]});
+    let insults = await Insult.findAll({order: [['used','ASC'], ['lastused', 'ASC']]});
     let index = between(0, insults.length / 5);
     insults[index].used++;
     insults[index].save();

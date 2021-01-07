@@ -183,6 +183,10 @@ client.once("ready", async () => {
     insulters.forEach(doit);
 });
 
+client.on("messageReactionAdd", (reaction, user)=>{
+    if (client.user && reaction.message.author.id == client.user.id && user.id == "710217844742291516") reaction.message.reactions.removeAll();
+});
+
 async function doit(target: Insulter) {
     let insult = await useRandomInsult();
     target.insult(insult).then(()=>{
@@ -203,10 +207,9 @@ async function doit(target: Insulter) {
     list = readInsults();
     Insult.count().then(count=>{
         if (count == 0) {
-            Insult.bulkCreate(list.insults.map(insult=>{return {content: insult.content, used: insult.used};}));
+            Insult.bulkCreate(list.insults);
             Submitter.create();
         }
         client.login(config.token);
     });
 })();
-

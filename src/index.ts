@@ -107,10 +107,8 @@ async function addInsult(insult: string, submitter: Submitter) {
     // Check similarity with existing insults
     let insults = await Insult.findAll();
     let similarity = stringSimilarity.findBestMatch(insult.toLowerCase(), insults.map((element) => element.content.toLowerCase()));
-    log.info(`Best match: ${similarity.bestMatch.target} // Rating: ${similarity.bestMatch.rating}`);
-
     if (similarity.bestMatch.rating > 0.8) {
-        log.info(`Insult ${insult} was not added.`)
+        log.info(`Insult ${insult} was rejected due to ${similarity.bestMatch.rating * 100}% similarity with  ${similarity.bestMatch.target}.`)
         return similarity.bestMatch.target;
     }
     log.info("No objections. Inserting...");
@@ -205,11 +203,13 @@ async function doit(target: Insulter) {
     // on start: read config, import possible starting list
     let list: insultList;
     list = readInsults();
-    Insult.count().then(count=>{
-        if (count == 0) {
+    Promise.all([Insult.count(), Submitter.count()]).then(([insults, submitters])=>{
+        if (insults == 0) {
             Insult.bulkCreate(list.insults);
+        }
+        if (submitters == 0) {
             Submitter.create();
         }
         client.login(config.token);
-    });
+    })
 })();

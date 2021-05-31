@@ -107,7 +107,7 @@ async function addInsult(insult: string, submitter: Submitter) {
     // Check similarity with existing insults
     let insults = await Insult.findAll();
     let similarity = stringSimilarity.findBestMatch(insult.toLowerCase(), insults.map((element) => element.content.toLowerCase()));
-    if (similarity.bestMatch.rating > 0.8) {
+    if (similarity.bestMatch.rating > 0.8 && !insult.match(/<@\d+>/)) {
         log.info(`Insult ${insult} was rejected due to ${similarity.bestMatch.rating * 100}% similarity with  ${similarity.bestMatch.target}.`)
         return similarity.bestMatch.target;
     }
@@ -159,7 +159,8 @@ client.on("message", async (message) => {
         approve(message);
     } else {
         log.info(`Received proposition ${message.content} from approved user ${message.author.username}#${message.author.discriminator}`)
-        let denied = await addInsult(message.content, submitter);
+        let content = message.content == "@everyone" || message.content == "@here" ? message.author.toString() : message.content;
+        let denied = await addInsult(content, submitter);
         if (denied) message.channel.send("Too similar to: " + denied);
         else message.channel.send("Added!");
     }
